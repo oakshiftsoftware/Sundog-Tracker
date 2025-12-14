@@ -1,4 +1,4 @@
-# Sundog Tracker v0.0.5
+# Sundog Tracker
 
 **An unofficial companion app for Young Suns**
 
@@ -85,8 +85,7 @@ This application is **unofficial** and **fan-made**. It is not affiliated with, 
 ## 🙏 Credits
 
 **Developed by**: Oakshift Software  
-**Game by**: KO_OP  
-**Community**: Young Suns players
+**Game by**: KO_OP
 
 ---
 
