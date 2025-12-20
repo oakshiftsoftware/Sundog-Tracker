@@ -1,4 +1,3 @@
-# Imports
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.screenmanager import MDScreenManager
@@ -19,7 +18,6 @@ from pathlib import Path
 import json
 import threading
 
-# Use absolute import so the app runs correctly when executed as a script
 from services import DataService
 
 
@@ -37,7 +35,7 @@ class Config:
         self.resources_path = str("/".join([self.cdn_host, "resources.json"]))
         self.blueprints_path = str("/".join([self.cdn_host, "blueprints.json"]))
         self.app_name = "Sundog Tracker"
-        self.app_version = "0.0.5"
+        self.app_version = "0.0.6"
         self.app_author = "Oakshift Software"
         self.app_description = "A companion app for Young Suns Xbox game. Allowing for users to create a list of things they wish to build, and have the companion app list the required resources and locations where they can be found."
 
@@ -74,7 +72,6 @@ class BlueprintsScreen(MDScreen):
         app = MDApp.get_running_app()
         self.ids.blueprint_list.clear_widgets()
         
-        # Categorize blueprints
         intermediates = []
         equipment = []
         for bp_id, bp_data in app.blueprints.items():
@@ -84,7 +81,6 @@ class BlueprintsScreen(MDScreen):
             elif variant == "equipment":
                 equipment.append((bp_id, bp_data))
         
-        # Add section headers and items
         if intermediates:
             self.ids.blueprint_list.add_widget(
                 OneLineListItem(text="Intermediates", disabled=True, theme_text_color="Primary")
@@ -114,7 +110,6 @@ class BlueprintDetailScreen(MDScreen):
         self.refresh()
 
     def on_pre_enter(self):
-        # Clear previous content to avoid flicker of old data
         if hasattr(self, "ids") and "detail_list" in self.ids:
             self.ids.detail_list.clear_widgets()
         self.title = "Loading..."
@@ -132,7 +127,6 @@ class BlueprintDetailScreen(MDScreen):
         medium = bp.get("medium", "")
         self.title = bp_name or "Details"
         
-        # Header info
         self.ids.detail_list.add_widget(
             OneLineListItem(text=f"Name: {bp_name}", disabled=True)
         )
@@ -142,24 +136,26 @@ class BlueprintDetailScreen(MDScreen):
         self.ids.detail_list.add_widget(
             OneLineListItem(text=f"Made in: {medium.title()}", disabled=True)
         )
+        if "gratitude_cost" in bp:
+            self.ids.detail_list.add_widget(
+                OneLineListItem(text=f"Gratitude Cost: {bp.get('gratitude_cost', 0)}", disabled=True)
+            )
         self.ids.detail_list.add_widget(
             OneLineListItem(text="Required:", disabled=True, theme_text_color="Primary")
         )
         
-        # Parse requirements and expand intermediates
         required = bp.get("required", [])
         for req in required:
             item_id = req.get("item", "")
             qty = req.get("quantity", 0)
             
-            # Check if this item is an intermediate blueprint
             if item_id in app.blueprints:
                 intermediate_bp = app.blueprints[item_id]
                 item_name = intermediate_bp.get("name", item_id)
                 self.ids.detail_list.add_widget(
                     OneLineListItem(text=f"  - {item_name} x{qty} (intermediate)", disabled=True)
                 )
-                # Show nested resources
+                
                 for sub_req in intermediate_bp.get("required", []):
                     sub_item_id = sub_req.get("item", "")
                     sub_qty = sub_req.get("quantity", 0)
@@ -171,7 +167,6 @@ class BlueprintDetailScreen(MDScreen):
                         OneLineListItem(text=f"    - {res_name} x{total_sub_qty} ({loc})", disabled=True)
                     )
             else:
-                # Direct resource
                 res_data = app.resources.get(item_id, {})
                 res_name = res_data.get("name", item_id)
                 loc = format_location(res_data.get("location", ""))
@@ -197,14 +192,21 @@ class ResourcesScreen(MDScreen):
             )
             return
         
-        # Show resource totals with counters
+        if totals.get("gratitude", 0) > 0:
+            self.ids.resources_list.add_widget(
+                OneLineListItem(
+                    text=f"Total Gratitude Cost: {totals['gratitude']}",
+                    disabled=True,
+                    theme_text_color="Primary"
+                )
+            )
+        
         for res_id, required_qty in sorted(totals.get("resources", {}).items()):
             res_data = app.resources.get(res_id, {})
             res_name = res_data.get("name", res_id)
             loc = format_location(res_data.get("location", ""))
             collected = app.resource_tracker.get(res_id, 0)
             
-            # Create a custom list item with counter
             item = self._create_resource_item(res_id, res_name, required_qty, collected, loc)
             self.ids.resources_list.add_widget(item)
     
@@ -214,19 +216,15 @@ class ResourcesScreen(MDScreen):
         
         box = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(64), padding=dp(8), spacing=dp(8))
         
-        # Left side: resource info
-        # Fill remaining horizontal space after the counter cluster
         info_box = MDBoxLayout(orientation="vertical", size_hint_x=1)
         name_label = MDLabel(text=res_name, size_hint_y=None, height=dp(20), font_style="Body1")
         loc_label = MDLabel(text=f"({location})", size_hint_y=None, height=dp(16), font_style="Caption", theme_text_color="Secondary")
         info_box.add_widget(name_label)
         info_box.add_widget(loc_label)
         
-        # Right side: counter (update in-place to avoid full refresh lag)
-        # Let the counter cluster size itself to its content so buttons stay visible
         counter_box = MDBoxLayout(orientation="horizontal", size_hint_x=None, spacing=dp(4))
         counter_box.bind(minimum_width=counter_box.setter("width"))
-        # Give the counter a fixed width large enough for "000/000"
+        
         count_label = MDLabel(
             text=f"{collected}/{required}",
             halign="center",
@@ -273,7 +271,7 @@ class ResourcesScreen(MDScreen):
     def _prompt_set(self, res_id, required, label_widget):
         app = MDApp.get_running_app()
         current = app.resource_tracker.get(res_id, 0)
-        # Wrap field in a padded container to nudge label/hint rightward
+        
         field = MDTextField(
             text=str(current),
             input_filter="int",
@@ -298,7 +296,6 @@ class ResourcesScreen(MDScreen):
         def on_cancel(*_args):
             dialog.dismiss()
 
-        # Place the field inside a padded box to avoid hint overlap
         content_box = MDBoxLayout(
             orientation="vertical",
             padding=[dp(12), 0, dp(12), 0],
@@ -421,7 +418,7 @@ KV = """
                     size_hint_y: None
                     height: self.texture_size[1]
                 MDLabel:
-                    text: "App Version: " + app.app_config.app_version
+                    text: "App Version: " + app.app_config.app_version + " (Jamie Harper)"
                     theme_text_color: "Secondary"
                     font_style: "Caption"
                     size_hint_y: None
@@ -434,8 +431,8 @@ class YSCApp(MDApp):
     resources = DictProperty({})
     blueprints = DictProperty({})
     build_queue = ListProperty([])
-    resource_tracker = DictProperty({})  # Track collected resources
-
+    resource_tracker = DictProperty({})
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.data_service = DataService(self)
@@ -444,21 +441,20 @@ class YSCApp(MDApp):
 
     def build(self):
         Builder.load_string(KV)
-        # Apply custom color scheme
+        
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Purple"
         self.theme_cls.primary_hue = "900"
         self.theme_cls.accent_palette = "Amber"
         self.theme_cls.accent_hue = "400"
         
-        # Screens
         self.sm.add_widget(BuildQueueScreen(name="queue"))
         self.sm.add_widget(BlueprintsScreen(name="blueprints"))
         self.detail_screen = BlueprintDetailScreen(name="detail")
         self.sm.add_widget(self.detail_screen)
         self.sm.add_widget(ResourcesScreen(name="resources"))
         self.sm.add_widget(AboutScreen(name="about"))
-        # Load cached data immediately, then refresh from network in background
+        
         self.load_data_cached()
         threading.Thread(target=self.load_data_remote, daemon=True).start()
         return self.sm
@@ -501,19 +497,16 @@ class YSCApp(MDApp):
                     if tracker and isinstance(tracker.get("collected"), dict):
                         self.resource_tracker = tracker["collected"]
                 except Exception as e:
-                    # Basic logging; visible in adb logcat
                     print(f"[YSC] Failed applying remote updates: {e}")
 
             Clock.schedule_once(_apply_updates)
         except Exception as e:
-            # Basic logging; visible in adb logcat
             print(f"[YSC] Remote load failed: {e}")
 
     def switch_screen(self, name):
         self.sm.current = name
 
     def show_blueprint_detail(self, blueprint_id):
-        # Prepare detail screen before navigation to avoid stale content flash
         self.detail_screen.blueprint_id = blueprint_id
         if "detail_list" in self.detail_screen.ids:
             self.detail_screen.ids.detail_list.clear_widgets()
@@ -543,7 +536,7 @@ class YSCApp(MDApp):
 
     def compute_totals(self):
         """Compute total resources needed, expanding intermediates recursively"""
-        totals = {"resources": {}}
+        totals = {"resources": {}, "gratitude": 0}
         
         def add_requirements(bp_id, multiplier=1):
             bp = self.blueprints.get(bp_id, {})
@@ -551,15 +544,15 @@ class YSCApp(MDApp):
                 item_id = req.get("item", "")
                 qty = req.get("quantity", 0) * multiplier
                 
-                # If item is an intermediate, recurse
                 if item_id in self.blueprints:
                     add_requirements(item_id, qty)
                 else:
-                    # It's a base resource
                     totals["resources"][item_id] = totals["resources"].get(item_id, 0) + qty
         
         for bp_id in self.build_queue:
             add_requirements(bp_id)
+            bp = self.blueprints.get(bp_id, {})
+            totals["gratitude"] += bp.get("gratitude_cost", 0)
         
         return totals
 
